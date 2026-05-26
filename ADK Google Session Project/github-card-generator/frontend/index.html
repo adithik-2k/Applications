@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Dev Card Generator</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --container-bg: #161b22;
+            --text-primary: #f0f6fc;
+            --text-secondary: #8b949e;
+            --accent: #238636;
+            --accent-hover: #2ea043;
+            --border-color: #30363d;
+            --error: #f85149;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 700px;
+            text-align: center;
+            background: var(--container-bg);
+            padding: 40px;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+        }
+
+        h1 {
+            font-weight: 800;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #58a6ff, #bc8cff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subheading {
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 12px;
+        }
+
+        input {
+            flex: 1;
+            background: #0d1117;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 14px;
+            color: white;
+            font-size: 1rem;
+            outline: none;
+        }
+
+        input:focus {
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 3px rgba(88,166,255,.2);
+        }
+
+        button {
+            border: none;
+            cursor: pointer;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: .2s ease;
+        }
+
+        .generate-btn {
+            background: var(--accent);
+            color: white;
+            padding: 14px 24px;
+        }
+
+        .generate-btn:hover {
+            background: var(--accent-hover);
+        }
+
+        .generate-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        #result-area {
+            margin-top: 30px;
+            min-height: 200px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .skeleton {
+            width: 100%;
+            height: 300px;
+            border-radius: 14px;
+            background: #21262d;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .skeleton::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            transform: translateX(-100%);
+            background: linear-gradient(
+                90deg,
+                transparent,
+                rgba(255,255,255,0.08),
+                transparent
+            );
+            animation: shimmer 1.5s infinite;
+        }
+
+        @keyframes shimmer {
+            100% {
+                transform: translateX(100%);
+            }
+        }
+
+        .error-msg {
+            color: #ff7b72;
+            background: rgba(248,81,73,.12);
+            border: 1px solid rgba(248,81,73,.3);
+            padding: 14px;
+            border-radius: 10px;
+        }
+
+        .card-container {
+            border-radius: 14px;
+            overflow: hidden;
+            animation: fadeIn .4s ease;
+            box-shadow: 0 12px 35px rgba(0,0,0,.35);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .share-btn {
+            margin-top: 18px;
+            padding: 12px 18px;
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        .share-btn:hover {
+            color: white;
+            border-color: #8b949e;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>GitHub Dev Card</h1>
+
+        <p class="subheading">
+            Enter any public GitHub username
+        </p>
+
+        <div class="input-group">
+            <input
+                type="text"
+                id="username"
+                placeholder="e.g. torvalds"
+                spellcheck="false"
+            >
+
+            <button
+                id="generateBtn"
+                class="generate-btn"
+                onclick="handleGenerate()"
+            >
+                Generate Card
+            </button>
+        </div>
+
+        <div id="result-area">
+            <div id="loading" class="skeleton hidden"></div>
+
+            <div
+                id="error"
+                class="error-msg hidden"
+            ></div>
+
+            <div id="card-wrapper" class="hidden">
+                <div
+                    id="card-content"
+                    class="card-container"
+                ></div>
+
+                <button
+                    id="copy-btn"
+                    class="share-btn"
+                    onclick="copyUrl()"
+                >
+                    Copy URL to Clipboard
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const BACKEND_URL = "http://localhost:8080";
+        let currentCardUrl = "";
+
+        async function handleGenerate() {
+
+            const username =
+                document.getElementById("username")
+                .value
+                .trim();
+
+            const loading =
+                document.getElementById("loading");
+
+            const error =
+                document.getElementById("error");
+
+            const wrapper =
+                document.getElementById("card-wrapper");
+
+            const cardContent =
+                document.getElementById("card-content");
+
+            const button =
+                document.getElementById("generateBtn");
+
+            if (!username) {
+                showError(
+                    "Please enter a GitHub username."
+                );
+                return;
+            }
+
+            // Reset UI
+            error.classList.add("hidden");
+            wrapper.classList.add("hidden");
+            loading.classList.remove("hidden");
+
+            button.disabled = true;
+            button.textContent = "Generating...";
+
+            try {
+
+                const response = await fetch(
+                    `${BACKEND_URL}/generate`,
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type":
+                            "application/json"
+                        },
+                        body: JSON.stringify({
+                            username
+                        })
+                    }
+                );
+
+                const data =
+                    await response.json();
+
+                if (!response.ok) {
+                    throw new Error(
+                        data.detail ||
+                        "Failed to generate card"
+                    );
+                }
+
+                if (!data.card_url) {
+                    throw new Error(
+                        "Card URL not returned by backend."
+                    );
+                }
+
+                const htmlResponse =
+                    await fetch(
+                        `${BACKEND_URL}${data.card_url}`
+                    );
+
+                if (!htmlResponse.ok) {
+                    throw new Error(
+                        "Generated card could not be loaded."
+                    );
+                }
+
+                const html =
+                    await htmlResponse.text();
+
+                cardContent.innerHTML = html;
+
+                currentCardUrl =
+                    `${BACKEND_URL}${data.card_url}`;
+
+                wrapper.classList.remove(
+                    "hidden"
+                );
+
+            } catch (err) {
+
+                showError(
+                    err.message ||
+                    "Something went wrong."
+                );
+
+            } finally {
+
+                loading.classList.add(
+                    "hidden"
+                );
+
+                button.disabled = false;
+                button.textContent =
+                    "Generate Card";
+            }
+        }
+
+        function showError(message) {
+            const error =
+                document.getElementById(
+                    "error"
+                );
+
+            error.textContent =
+                `Oops! ${message}`;
+
+            error.classList.remove(
+                "hidden"
+            );
+        }
+
+        function copyUrl() {
+
+            navigator.clipboard.writeText(
+                currentCardUrl
+            );
+
+            const btn =
+                document.getElementById(
+                    "copy-btn"
+                );
+
+            const original =
+                btn.textContent;
+
+            btn.textContent =
+                "Copied!";
+
+            setTimeout(() => {
+                btn.textContent =
+                    original;
+            }, 2000);
+        }
+
+        document
+            .getElementById("username")
+            .addEventListener(
+                "keypress",
+                function(e) {
+                    if (e.key === "Enter") {
+                        handleGenerate();
+                    }
+                }
+            );
+    </script>
+</body>
+</html>
